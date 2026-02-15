@@ -10,16 +10,16 @@ carc_dir = '/home/alongon/data/ConceptARC'
 num_tasks = 10
 
 tokenizer = AutoTokenizer.from_pretrained(
-    "google/gemma-2-9b-it",
+    "meta-llama/Llama-3.1-8B-Instruct",
     token=hf_token
 )
 model = AutoModelForCausalLM.from_pretrained(
-    "google/gemma-2-9b-it",
+    "meta-llama/Llama-3.1-8B-Instruct",
     device_map="cuda:0",
     token=hf_token
 )
 
-# vlm_state_dict = torch.load('/home/alongon/model_weights/ewok/gemma_2_9b_llava_MORE.pth')
+# vlm_state_dict = torch.load('/home/alongon/model_weights/ewok/llama-3_1-8B_llava_MORE.pth')
 # rmv_ks = []
 # for k in vlm_state_dict.keys():
 #     if 'mm_projector' in k or 'vision_tower' in k:
@@ -32,6 +32,8 @@ model = AutoModelForCausalLM.from_pretrained(
 # model.model.load_state_dict(vlm_state_dict)
 
 for concept in os.listdir(carc_dir):
+    num_correct = 0
+    total_num = 0
     for i in range(num_tasks):
         with open(os.path.join(carc_dir, concept, f'{concept}{i+1}.json'), 'r') as file:
             task = json.load(file)
@@ -54,11 +56,21 @@ for concept in os.listdir(carc_dir):
 
             #   TODO:  perhaps only specify the characters we want to keep when cleaning the string: [, ], space, and all numbers (though are all numbers used??)
             #          maybe split on the first character that isn't one of the accepted, and take first entry. 
-            model_output = tokenizer.decode(outputs[0]).split(f'output {test_num}: ')[1].replace('\n', '').replace('<end_of_turn>', '').replace('<eos>', '')
+            model_output = tokenizer.decode(outputs[0]).split(f'output {test_num}: ')[1]#.split('input')[0][1:].split('Answer')[0].replace('\n', '').replace('<end_of_turn>', '').replace('<eos>', '').replace('<|eot_id|>', '')
+            for c in range(len(model_output)):
+                if model_output[c] not in ['[', ']', ' ', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9']:
+                    model_output = model_output[:c]
+                    break
+            model_output = model_output.strip()
             # model_output = re.sub('[^[] 0123456789]', '', model_output)
             gt_output = f"{task['test'][j]['output']}"[1:-1].replace(',', '')
-            print(f'Model Output:\n{model_output}\n')
-            print(f'Ground Truth:\n{gt_output}\n')
-            print(f'Correct?  {model_output == gt_output}\n\n-----------\n\n')
+            # print(f'Model Output:\n{model_output}\n')
+            # print(f'Ground Truth:\n{gt_output}\n')
+            # print(f'Correct?  {model_output == gt_output}\n\n-----------\n\n')
 
-    exit()
+            if model_output == gt_output:
+                num_correct += 1
+
+            total_num += 1
+
+    print(f'{concept} Accuracy: {num_correct / total_num}')
